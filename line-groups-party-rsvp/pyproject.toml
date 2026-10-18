@@ -1,0 +1,9 @@
+[project]
+name = "line-groups-party-rsvp"
+version = "0.1.0"
+requires-python = ">=3.10"
+dependencies = [
+    "line-bot-sdk>=3.26.0",
+    "functions-framework",
+    "python-dotenv",
+]

@@ -1,0 +1,4 @@
+google-adk>=2.2.0,<3
+line-bot-sdk>=3.26.0
+functions-framework
+python-dotenv
