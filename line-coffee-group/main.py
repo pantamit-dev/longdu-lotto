@@ -210,11 +210,9 @@ def handle_message(event):
         return
 
 
-@handler.add(MessageEditedEvent)
+@handler.add(MessageEditedEvent, message=TextMessageContent)
 def handle_edited_message(event):
     """Runs every time someone edits a message."""
-    if not isinstance(event.message, TextMessageContent):
-        return
     text = (event.message.text or "").strip()
     if not text:
         return

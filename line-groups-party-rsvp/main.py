@@ -185,7 +185,7 @@ def party_card(people, change=None):
 
 
 @handler.add(MessageEvent, message=TextMessageContent)
-@handler.add(MessageEditedEvent) 
+@handler.add(MessageEditedEvent, message=TextMessageContent) 
 def handle_message(event):
     """Runs every time someone sends or edits a message in the group."""
 

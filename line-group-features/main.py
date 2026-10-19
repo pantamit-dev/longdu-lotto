@@ -63,16 +63,36 @@ def reply_text(reply_token: str, text: str) -> None:
 # 1. Message Event - a member sends a message
 @handler.add(MessageEvent, message=TextMessageContent)
 def handle_message(event):
-    if event.source.type == "group":
-        print(f"Text: {event.message.text}")
+    if event.source.type != "group":
+        return
+    text = event.message.text.strip()
+    group_id = event.source.group_id
+    user_id = getattr(event.source, "user_id", None)
+    reply = None
+
+    # Get group chat summary
+    if text == "ข้อมูลกลุ่ม":
+        group = line_bot_api.get_group_summary(group_id)
+        reply = f"ชื่อกลุ่ม: {group.group_name}"
+
+    # Get number of group members
+    elif text == "จำนวนสมาชิก":
+        members = line_bot_api.get_group_members_count(group_id)
+        reply = f"สมาชิกทั้งหมด {members.count} คน"
+
+    # Get group member profile
+    elif text == "โปรไฟล์ฉัน" and user_id:
+        profile = line_bot_api.get_group_member_profile(group_id, user_id)
+        reply = f"ชื่อ: {profile.display_name}"
+
+    if reply:
+        reply_text(event.reply_token, reply)
 
 
 # 2. Message Edit Event - a member edits a message
 # The SDK only applies the message= filter to MessageEvent, so check the type here
-@handler.add(MessageEditedEvent)
+@handler.add(MessageEditedEvent, message=TextMessageContent)
 def handle_message_edited(event):
-    if not isinstance(event.message, TextMessageContent):
-        return
     print(f"Edited message ID: {event.message.id}")
     print(f"New text: {event.message.text}")
 
