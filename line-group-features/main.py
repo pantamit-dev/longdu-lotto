@@ -4,19 +4,25 @@ import os
 import functions_framework
 from dotenv import load_dotenv
 from linebot.v3 import WebhookHandler
+from linebot.v3.exceptions import InvalidSignatureError
 from linebot.v3.messaging import (
     ApiClient,
     Configuration,
     MessagingApi,
     ReplyMessageRequest,
+    TextMessage,
 )
 from linebot.v3.webhooks import (
+    JoinEvent,
+    LeaveEvent,
+    MemberJoinedEvent,
+    MemberLeftEvent,
     MessageEditedEvent,
     MessageEvent,
+    PostbackEvent,
     TextMessageContent,
-    
+    UnsendEvent,
 )
-
 
 
 load_dotenv()
@@ -24,6 +30,24 @@ load_dotenv()
 handler = WebhookHandler(os.environ["LINE_CHANNEL_SECRET"])
 line_bot_api = MessagingApi(ApiClient(Configuration(access_token=os.environ["LINE_CHANNEL_ACCESS_TOKEN"])))
 
+
+@functions_framework.http
+def callback(request):
+    # get X-Line-Signature header value
+    signature = request.headers["X-Line-Signature"]
+
+    # get request body as text
+    body = request.get_data(as_text=True)
+    print("Request body: " + body)
+
+    # handle webhook body
+    try:
+        handler.handle(body, signature)
+    except InvalidSignatureError:
+        print(
+            "Invalid signature. Please check your channel access token/channel secret."
+        )
+    return "OK"
 
 def reply_text(reply_token: str, text: str) -> None:
     if not reply_token:

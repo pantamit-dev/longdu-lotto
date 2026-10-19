@@ -8,10 +8,10 @@
         [ปุ่ม ยืนยันส่งออเดอร์]
 ```
 
-ไฟล์มี 3 ไฟล์
+ไฟล์หลัก
 
-- `shop.py` เมนูและออเดอร์ใน SQLite
-- `adk_agent.py` tools + Gemini agent + ฟังก์ชัน `reply`
+- `coffee_shop.py` เมนูและออเดอร์ใน SQLite
+- `intent.py` ให้ Jev แยกเจตนาของข้อความ
 - `main.py` รับ webhook ของ LINE และปุ่ม postback
 
 ## รัน
@@ -22,6 +22,6 @@ uv sync
 uv run functions-framework --target=callback --port=8080
 ```
 
-ตั้ง `LINE_CHANNEL_SECRET`, `LINE_CHANNEL_ACCESS_TOKEN` และ Gemini (`GOOGLE_GENAI_USE_VERTEXAI` หรือ `GEMINI_API_KEY`) ใน `.env`
+ตั้ง `LINE_CHANNEL_SECRET`, `LINE_CHANNEL_ACCESS_TOKEN` และ `JEV_API_KEY` ใน `.env`
 
 Webhook URL คือ URL ของฟังก์ชัน เช่น `https://<host>/`

@@ -21,7 +21,7 @@ MENU = {
     "โกโก้": 55,
 }
 
-_ALIASES = {
+ALIASES = {
     "espresso": "เอสเปรสโซ",
     "americano": "อเมริกาโน",
     "latte": "ลาเต้",
@@ -31,11 +31,11 @@ _ALIASES = {
     "green tea": "ชาเขียว",
 }
 
-_DISPLAY = {
+DISPLAY = {
     "อเมริกาโน": "อเมริกาโน่",
 }
 
-_NOTES = (
+NOTES = (
     "หวานปานกลาง",
     "หวานน้อย",
     "หวานมาก",
@@ -101,8 +101,8 @@ def menu_text() -> str:
 
 def find_item(name: str) -> str | None:
     key = name.strip().casefold()
-    if key in _ALIASES:
-        return _ALIASES[key]
+    if key in ALIASES:
+        return ALIASES[key]
     for item in MENU:
         folded = item.casefold()
         if key == folded or folded in key or key in folded:
@@ -114,7 +114,7 @@ def find_item_in_text(text: str) -> str | None:
     key = re.sub(r"\s+", "", text).casefold()
     best = None
     best_len = 0
-    pairs = [(alias, name) for alias, name in _ALIASES.items()]
+    pairs = [(alias, name) for alias, name in ALIASES.items()]
     pairs += [(name, name) for name in MENU]
     for needle, name in pairs:
         folded = needle.casefold()
@@ -130,7 +130,7 @@ def parse_order(text: str) -> dict | None:
         return None
     compact = re.sub(r"\s+", "", raw)
     note = ""
-    for word in sorted(_NOTES, key=len, reverse=True):
+    for word in sorted(NOTES, key=len, reverse=True):
         if word in compact:
             note = word
             compact = compact.replace(word, "", 1)
@@ -190,7 +190,7 @@ def _row(row: sqlite3.Row) -> dict:
 
 
 def drink_label(row: dict) -> str:
-    drink = _DISPLAY.get(row["item"], row["item"])
+    drink = DISPLAY.get(row["item"], row["item"])
     if row.get("note"):
         drink = f"{drink} {row['note']}"
     if row.get("qty", 1) > 1:
@@ -420,26 +420,27 @@ def save_message_order(
     chat_id: str,
     user_id: str,
     user_name: str,
-    text: str,
+    item: str,
     message_id: str,
     timestamp: int,
     picture_url: str = "",
+    qty: int = 1,
+    note: str = "",
 ) -> dict:
     """Record an order from a MessageEvent, linked to that message's id."""
-    parsed = parse_order(text)
-    if parsed is None or not parsed["item"]:
+    if not item:
         return {"status": "ignore"}
     existing = _by_message(chat_id, message_id) if message_id else None
     if existing is not None:
         return edit_message_order(
-            chat_id, user_id, user_name, text, message_id, timestamp, picture_url
+            chat_id, user_id, user_name, item, message_id, timestamp, picture_url, qty, note
         )
     result = add_item(
         chat_id,
         user_name,
-        parsed["item"],
-        parsed["qty"] or 1,
-        parsed["note"],
+        item,
+        qty or 1,
+        note,
         user_id,
         message_id,
         picture_url,
@@ -456,27 +457,33 @@ def edit_message_order(
     chat_id: str,
     user_id: str,
     user_name: str,
-    text: str,
+    item: str,
     message_id: str,
     timestamp: int,
     picture_url: str = "",
+    qty: int | None = None,
+    note: str | None = None,
 ) -> dict:
     """Update the existing order when LINE sends messageEdited for the same message id.
 
     Events whose timestamp is not newer than the stored one do not overwrite the latest state.
+    A missing item, quantity, or note keeps the value already stored.
     """
     row = _by_message(chat_id, message_id)
     if row is None:
         return {"status": "missing"}
     if int(timestamp) <= int(row["edited_at"] or 0):
         return {"status": "stale"}
-    parsed = parse_order(text)
-    if parsed is None or not parsed["item"]:
+    if not item and qty is None and note is None:
         return {"status": "error", "message": "แก้ข้อความแล้ว แต่ยังไม่เห็นชื่อกาแฟในเมนู"}
     before = drink_label(row)
-    note = parsed["note"] if parsed["mentions_item"] or parsed["mentions_note"] else row["note"]
-    qty = parsed["qty"] if parsed["qty"] is not None else row["qty"]
-    result = update_item(chat_id, row["id"], item=parsed["item"], qty=qty, note=note)
+    result = update_item(
+        chat_id,
+        row["id"],
+        item=item or row["item"],
+        qty=row["qty"] if qty is None else qty,
+        note=row["note"] if note is None else note,
+    )
     if result["status"] != "success":
         return result
     _touch(result["saved"]["id"], timestamp)

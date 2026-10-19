@@ -11,7 +11,7 @@
 
 ## ร้านกาแฟ
 
-ลูกค้าพิมพ์สั่งเครื่องดื่ม บอทจดรายการไว้ก่อน แล้วส่งปุ่มให้กดยืนยัน ออเดอร์ถูกส่งร้านเมื่อกดปุ่มเท่านั้น ใช้ Gemini ช่วยอ่านข้อความสั่ง และเก็บรายการใน SQLite
+ลูกค้าพิมพ์สั่งเครื่องดื่ม บอทจดรายการไว้ก่อน แล้วส่งปุ่มให้กดยืนยัน ออเดอร์ถูกส่งร้านเมื่อกดปุ่มเท่านั้น ใช้ Jev อ่านเจตนาของข้อความ และเก็บรายการใน SQLite
 
 ```bash
 cd line-coffee-group
@@ -25,7 +25,7 @@ functions-framework --target=callback --port=8080
 ตั้งค่าใน `.env`
 
 - `LINE_CHANNEL_SECRET` และ `LINE_CHANNEL_ACCESS_TOKEN` จาก LINE Developers Console
-- Gemini ผ่าน Vertex AI (`GOOGLE_GENAI_USE_VERTEXAI`, `GOOGLE_CLOUD_PROJECT`, `GOOGLE_CLOUD_LOCATION`) หรือ `GEMINI_API_KEY`
+- `JEV_API_KEY` สำหรับให้ Jev อ่านเจตนาของข้อความ
 
 รายละเอียดอยู่ใน [line-coffee-group/README.md](line-coffee-group/README.md)
 

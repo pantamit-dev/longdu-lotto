@@ -28,6 +28,16 @@ def connect() -> sqlite3.Connection:
     return conn
 
 
+def reset() -> None:
+    """Delete every RSVP row."""
+    conn = connect()
+    try:
+        conn.execute("DELETE FROM rsvps")
+        conn.commit()
+    finally:
+        conn.close()
+
+
 def going(chat_id: str) -> list[dict]:
     conn = connect()
     try:

@@ -1,6 +1,5 @@
 import json
 import os
-from contextvars import ContextVar
 
 import functions_framework
 from dotenv import load_dotenv
@@ -28,55 +27,34 @@ from linebot.v3.webhooks import (
 )
 
 import coffee_shop as shop
-from adk_agent import NO_REPLY, reply
+from intent import CONFIDENCE_THRESHOLD, read_message, shop_answer
 
 load_dotenv()
 
-configuration = Configuration(access_token=os.environ["LINE_CHANNEL_ACCESS_TOKEN"])
-_skip_signature: ContextVar[bool] = ContextVar("skip_line_signature", default=False)
-handler = WebhookHandler(
-    os.environ["LINE_CHANNEL_SECRET"],
-    skip_signature_verification=lambda: _skip_signature.get(),
+handler = WebhookHandler(os.environ["LINE_CHANNEL_SECRET"])
+line_bot_api = MessagingApi(
+    ApiClient(Configuration(access_token=os.environ["LINE_CHANNEL_ACCESS_TOKEN"]))
 )
-line_bot_api = MessagingApi(ApiClient(configuration))
 
-
-def normalize_webhook(body: str) -> str:
-    """Add the quoteToken the SDK requires when a messageEdited event omits it."""
-    try:
-        payload = json.loads(body)
-    except json.JSONDecodeError:
-        return body
-    changed = False
-    for event in payload.get("events", []):
-        message = event.get("message")
-        if (
-            isinstance(message, dict)
-            and message.get("type") == "text"
-            and not message.get("quoteToken")
-        ):
-            message["quoteToken"] = "-"
-            changed = True
-    if not changed:
-        return body
-    return json.dumps(payload, ensure_ascii=False)
+ASK_ORDER = "พิมพ์ชื่อกาแฟที่ต้องการได้เลย เช่น อเมริกาโน่ หรือ ชาเขียวหวานน้อย"
 
 
 @functions_framework.http
 def callback(request):
+    # get X-Line-Signature header value
     signature = request.headers["X-Line-Signature"]
+
+    # get request body as text
     body = request.get_data(as_text=True)
+    print("Request body: " + body)
+
+    # handle webhook body
     try:
-        if not handler.parser.signature_validator.validate(body, signature):
-            return ("Invalid signature", 400)
-        normalized = normalize_webhook(body)
-        token = _skip_signature.set(normalized != body)
-        try:
-            handler.handle(normalized, signature)
-        finally:
-            _skip_signature.reset(token)
+        handler.handle(body, signature)
     except InvalidSignatureError:
-        return ("Invalid signature", 400)
+        print(
+            "Invalid signature. Please check your channel access token/channel secret."
+        )
     return "OK"
 
 
@@ -88,27 +66,25 @@ def chat_id(source) -> str:
     return source.user_id
 
 
-def member_profile(source) -> tuple[str, str]:
+def sender(source) -> tuple[str, str]:
+    """Display name and picture. Falls back to ลูกค้า when LINE has no profile."""
     user_id = getattr(source, "user_id", None)
     if not user_id:
         return "ลูกค้า", ""
     try:
-        if source.type == "group":
+        if isinstance(source, GroupSource):
             profile = line_bot_api.get_group_member_profile(source.group_id, user_id)
-        elif source.type == "room":
+        elif isinstance(source, RoomSource):
             profile = line_bot_api.get_room_member_profile(source.room_id, user_id)
         else:
             profile = line_bot_api.get_profile(user_id)
+        name = profile.display_name or "ลูกค้า"
         picture = profile.picture_url or ""
         if not picture.startswith("https://"):
             picture = ""
-        return profile.display_name or "ลูกค้า", picture
+        return name, picture
     except Exception:
         return "ลูกค้า", ""
-
-
-def display_name(source) -> str:
-    return member_profile(source)[0]
 
 
 def send(event, messages) -> None:
@@ -140,34 +116,8 @@ def confirm_reply() -> QuickReply:
     )
 
 
-ASK_ORDER = "พิมพ์ชื่อกาแฟที่ต้องการได้เลย เช่น อเมริกาโน่ หรือ ชาเขียวหวานน้อย"
-
-
-def is_start(text: str) -> bool:
-    compact = "".join(text.split())
-    changed = True
-    while changed:
-        changed = False
-        for suffix in ("หน่อย", "ด้วย", "ที", "นะ", "ค่ะ", "ครับ", "คะ", "เลย"):
-            if compact.endswith(suffix) and len(compact) > len(suffix):
-                compact = compact[: -len(suffix)]
-                changed = True
-                break
-    return compact in {"สั่งกาแฟ", "เปิดออเดอร์", "เริ่มสั่ง"}
-
-
-def asks_menu(text: str) -> bool:
-    compact = "".join(text.split())
-    return compact in {"เมนู", "ดูเมนู", "ขอดูเมนู", "มีอะไรบ้าง", "เมนูมีอะไร"}
-
-
-def asks_summary(text: str) -> bool:
-    compact = "".join(text.split())
-    return compact in {"สรุปออเดอร์", "สรุป", "ดูออเดอร์", "ออเดอร์"}
-
-
-def _avatar(row: dict) -> dict:
-    picture = row.get("picture_url") or ""
+def _avatar(person: dict) -> dict:
+    picture = person.get("picture_url") or ""
     if picture.startswith("https://"):
         return {
             "type": "box",
@@ -186,7 +136,7 @@ def _avatar(row: dict) -> dict:
                 }
             ],
         }
-    letter = (row.get("user_name") or "ล")[:1]
+    letter = (person.get("user_name") or "ล")[:1]
     return {
         "type": "box",
         "layout": "vertical",
@@ -210,14 +160,15 @@ def _avatar(row: dict) -> dict:
     }
 
 
-def _member_row(row: dict) -> dict:
+def _member_row(person: dict) -> dict:
     return {
         "type": "box",
         "layout": "horizontal",
         "spacing": "md",
         "alignItems": "center",
+        "margin": "lg",
         "contents": [
-            _avatar(row),
+            _avatar(person),
             {
                 "type": "box",
                 "layout": "vertical",
@@ -225,14 +176,14 @@ def _member_row(row: dict) -> dict:
                 "contents": [
                     {
                         "type": "text",
-                        "text": row["user_name"] or "ลูกค้า",
+                        "text": person["user_name"] or "ลูกค้า",
                         "weight": "bold",
                         "size": "sm",
                         "wrap": True,
                     },
                     {
                         "type": "text",
-                        "text": shop.drink_label(row),
+                        "text": shop.drink_label(person),
                         "size": "xs",
                         "color": "#8A8A8A",
                         "wrap": True,
@@ -245,46 +196,44 @@ def _member_row(row: dict) -> dict:
 
 
 def order_card(order: dict, change: dict | None = None):
-    """Order summary card with a green gradient header, plus a change-of-mind banner when a message is edited."""
+    """Order summary card. A gray banner appears when someone edits their drink."""
     items = order["items"]
     if not items:
         return TextMessage(text=shop.summary_text(order)[:5000])
-    body = []
+
+    rows = []
     if change:
-        body.append(
-            {
-                "type": "box",
-                "layout": "horizontal",
-                "backgroundColor": "#F2F3F5",
-                "paddingAll": "12px",
-                "cornerRadius": "8px",
-                "alignItems": "center",
-                "contents": [
-                    {
-                        "type": "text",
-                        "text": f"{change['user_name']} เปลี่ยนใจ",
-                        "size": "sm",
-                        "color": "#333333",
-                        "flex": 0,
-                    },
-                    {
-                        "type": "text",
-                        "text": change["after"],
-                        "size": "sm",
-                        "color": "#E53935",
-                        "weight": "bold",
-                        "margin": "sm",
-                        "wrap": True,
-                    },
-                ],
-            }
-        )
-    for row in items:
-        row_box = _member_row(row)
-        row_box["margin"] = "lg"
-        body.append(row_box)
-    count = len(items)
-    bubble = {
+        rows.append({
+            "type": "box",
+            "layout": "horizontal",
+            "backgroundColor": "#F2F3F5",
+            "paddingAll": "12px",
+            "cornerRadius": "8px",
+            "alignItems": "center",
+            "contents": [
+                {
+                    "type": "text",
+                    "text": f"{change['user_name']} เปลี่ยนใจ",
+                    "size": "sm",
+                    "color": "#333333",
+                    "flex": 0,
+                },
+                {
+                    "type": "text",
+                    "text": change["after"],
+                    "size": "sm",
+                    "color": "#E53935",
+                    "weight": "bold",
+                    "margin": "sm",
+                    "wrap": True,
+                },
+            ],
+        })
+    for person in items:
+        rows.append(_member_row(person))
+
+    title = f"ออเดอร์ทั้งหมด {len(items)} รายการ"
+    card = {
         "type": "bubble",
         "size": "mega",
         "header": {
@@ -300,7 +249,7 @@ def order_card(order: dict, change: dict | None = None):
             "contents": [
                 {
                     "type": "text",
-                    "text": f"ออเดอร์ทั้งหมด {count} รายการ",
+                    "text": title,
                     "color": "#FFFFFF",
                     "weight": "bold",
                     "size": "lg",
@@ -313,15 +262,107 @@ def order_card(order: dict, change: dict | None = None):
             "layout": "vertical",
             "paddingAll": "16px",
             "backgroundColor": "#FFFFFF",
-            "contents": body,
+            "contents": rows,
         },
     }
-    quick_reply = confirm_reply()
     return FlexMessage(
         alt_text=shop.summary_text(order)[:400],
-        contents=FlexContainer.from_dict(bubble),
-        quick_reply=quick_reply,
+        contents=FlexContainer.from_dict(card),
+        quick_reply=confirm_reply(),
     )
+
+
+def _save_order(event, cid, user_id, name, picture, drink: dict):
+    """Save the drink Jev picked. If none was picked, ask for a menu name."""
+    result = shop.save_message_order(
+        cid,
+        user_id,
+        name,
+        drink["item"] or "",
+        event.message.id,
+        event.timestamp or 0,
+        picture,
+        drink["qty"] or 1,
+        drink["note"] or "",
+    )
+    status = result["status"]
+    if status == "ignore":
+        quick_reply = confirm_reply() if shop.open_order(cid)["items"] else None
+        send(event, [TextMessage(text=ASK_ORDER, quick_reply=quick_reply)])
+        return
+    if status == "stale":
+        return
+    if status != "success":
+        send(event, [TextMessage(text=result.get("message", "จดออเดอร์ไม่ได้")[:5000])])
+        return
+    send(event, [order_card(result["order"])])
+
+
+def _edit_order(event, cid, user_id, name, picture, drink: dict):
+    """An edit updates the drink already tied to that message."""
+    result = shop.edit_message_order(
+        cid,
+        user_id,
+        name,
+        drink["item"] or "",
+        event.message.id,
+        event.timestamp or 0,
+        picture,
+        drink["qty"],
+        drink["note"],
+    )
+    status = result.get("status")
+    if status == "error":
+        send(event, [TextMessage(text=result["message"][:5000])])
+        return
+    if status != "success":
+        return
+    send(event, [order_card(result["order"], result.get("change"))])
+
+
+@handler.add(MessageEvent, message=TextMessageContent)
+@handler.add(MessageEditedEvent)
+def handle_message(event):
+    """Runs every time someone sends or edits a message."""
+    if not isinstance(event.message, TextMessageContent):
+        return
+    if not getattr(event, "reply_token", None):
+        return
+
+    cid = chat_id(event.source)
+    text = event.message.text.strip()
+    name, picture = sender(event.source)
+    user_id = getattr(event.source, "user_id", None) or name
+
+    # Jev reads the message: intent, and which menu item to put on the order.
+    reading = read_message(text)
+    if isinstance(event, MessageEditedEvent):
+        _edit_order(event, cid, user_id, name, picture, reading)
+        return
+
+    intent, confidence = reading["intent"], reading["confidence"]
+    if confidence >= CONFIDENCE_THRESHOLD:
+        if intent == "summary":
+            send(event, [order_card(shop.open_order(cid))])
+            return
+        answer = shop_answer(intent)
+        if answer:
+            quick_reply = confirm_reply() if shop.open_order(cid)["items"] else None
+            send(event, [TextMessage(text=answer[:5000], quick_reply=quick_reply)])
+            return
+        if intent == "order":
+            if not shop.round_is_open(cid):
+                shop.open_round(cid)
+            _save_order(event, cid, user_id, name, picture, reading)
+            return
+
+    if shop.round_is_open(cid):
+        if reading["item"]:
+            _save_order(event, cid, user_id, name, picture, reading)
+            return
+        quick_reply = confirm_reply() if shop.open_order(cid)["items"] else None
+        send(event, [TextMessage(text=ASK_ORDER, quick_reply=quick_reply)])
+        return
 
 
 def order_lines(items: list[dict], total: float) -> str:
@@ -333,93 +374,19 @@ def order_lines(items: list[dict], total: float) -> str:
     return "\n".join(lines)
 
 
-@handler.add(MessageEvent, message=TextMessageContent)
-def handle_text_message(event):
-    cid = chat_id(event.source)
-    text = event.message.text.strip()
-    name, picture = member_profile(event.source)
-    user_id = getattr(event.source, "user_id", None) or name
-    if asks_summary(text):
-        send(event, [order_card(shop.open_order(cid))])
-        return
-    if is_start(text):
-        shop.open_round(cid)
-        draft = shop.open_order(cid)
-        messages = [TextMessage(text=ASK_ORDER)]
-        if draft["items"]:
-            messages.append(order_card(draft))
-        send(event, messages)
-        return
-    if shop.round_is_open(cid):
-        if asks_menu(text):
-            send(event, [TextMessage(text=shop.menu_text()[:5000])])
-            return
-        result = shop.save_message_order(
-            cid,
-            user_id,
-            name,
-            text,
-            event.message.id,
-            event.timestamp or 0,
-            picture,
-        )
-        if result["status"] == "ignore":
-            quick_reply = confirm_reply() if shop.open_order(cid)["items"] else None
-            send(event, [TextMessage(text=ASK_ORDER, quick_reply=quick_reply)])
-            return
-        if result["status"] != "success":
-            if result["status"] != "stale":
-                send(event, [TextMessage(text=result.get("message", "จดออเดอร์ไม่ได้")[:5000])])
-            return
-        send(event, [order_card(result["order"])])
-        return
-    if shop.parse_order(text):
-        send(event, [TextMessage(text="พิมพ์ สั่งกาแฟ ก่อน แล้วพิมพ์ชื่อกาแฟได้เลย")])
-        return
-    answer = reply(text, cid, name)
-    if not answer or answer.strip() == NO_REPLY:
-        return
-    quick_reply = confirm_reply() if shop.open_order(cid)["items"] else None
-    send(event, [TextMessage(text=answer[:5000], quick_reply=quick_reply)])
-
-
-@handler.add(MessageEditedEvent)
-def handle_message_edited(event):
-    message = event.message
-    if getattr(message, "type", None) != "text":
-        return
-    cid = chat_id(event.source)
-    name, picture = member_profile(event.source)
-    user_id = getattr(event.source, "user_id", None) or name
-    result = shop.edit_message_order(
-        cid,
-        user_id,
-        name,
-        message.text.strip(),
-        message.id,
-        event.timestamp or 0,
-        picture,
-    )
-    if result.get("status") == "error":
-        send(event, [TextMessage(text=result["message"][:5000])])
-        return
-    if result.get("status") != "success":
-        return
-    send(event, [order_card(result["order"], result.get("change"))])
-
-
 @handler.add(PostbackEvent)
 def handle_postback(event):
+    """Confirm sends the open order. Cancel throws it away."""
     cid = chat_id(event.source)
     if event.postback.data == "confirm":
         result = shop.confirm_order(cid)
         if result["status"] != "success":
-            body = result["message"]
+            text = result["message"]
         else:
-            body = "ส่งออเดอร์แล้ว\n" + order_lines(result["items"], result["total"])
+            text = "ส่งออเดอร์แล้ว\n" + order_lines(result["items"], result["total"])
     elif event.postback.data == "cancel":
         result = shop.clear_open(cid)
-        body = "ยกเลิกออเดอร์ที่ยังไม่ส่งแล้ว" if result["count"] else "ไม่มีออเดอร์ค้าง"
+        text = "ยกเลิกออเดอร์ที่ยังไม่ส่งแล้ว" if result["count"] else "ไม่มีออเดอร์ค้าง"
     else:
         return
-    send(event, [TextMessage(text=body[:5000])])
+    send(event, [TextMessage(text=text[:5000])])

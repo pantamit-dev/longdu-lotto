@@ -4,6 +4,7 @@ import os
 import functions_framework
 from dotenv import load_dotenv
 from linebot.v3 import WebhookHandler
+from linebot.v3.exceptions import InvalidSignatureError
 from linebot.v3.messaging import (
     ApiClient,
     Configuration,
@@ -19,7 +20,7 @@ from linebot.v3.webhooks import (
     TextMessageContent,
 )
 
-from rsvp import apply_rsvp, going
+from rsvp import apply_rsvp, reset
 
 load_dotenv()
 
@@ -34,31 +35,71 @@ line_bot_api = MessagingApi(
 
 @functions_framework.http
 def callback(request):
-    """LINE sends every group message here."""
-    signature = request.headers.get("X-Line-Signature", "")
+    # get X-Line-Signature header value
+    signature = request.headers["X-Line-Signature"]
+
+    # get request body as text
     body = request.get_data(as_text=True)
+    print("Request body: " + body)
 
-    # 1. Make sure the request really comes from LINE
-    if not handler.parser.signature_validator.validate(body, signature):
-        return ("Invalid signature", 400)
-
-    # 2. Edited messages have no quoteToken, but the SDK requires one, so add it
-    data = json.loads(body)
-    for event in data.get("events", []):
-        message = event.get("message", {})
-        if message.get("type") == "text" and not message.get("quoteToken"):
-            message["quoteToken"] = "-"
-
-    # 3. Pass the events on to handle_message() below
-    handler.handle(json.dumps(data), signature)
+    # handle webhook body
+    try:
+        handler.handle(body, signature)
+    except InvalidSignatureError:
+        print(
+            "Invalid signature. Please check your channel access token/channel secret."
+        )
     return "OK"
+
+def _avatar(person: dict) -> dict:
+    picture = person.get("picture_url") or ""
+    if picture.startswith("https://"):
+        return {
+            "type": "box",
+            "layout": "vertical",
+            "width": "40px",
+            "height": "40px",
+            "cornerRadius": "20px",
+            "flex": 0,
+            "contents": [
+                {
+                    "type": "image",
+                    "url": picture,
+                    "size": "full",
+                    "aspectMode": "cover",
+                    "aspectRatio": "1:1",
+                }
+            ],
+        }
+    letter = (person.get("user_name") or "ส")[:1]
+    return {
+        "type": "box",
+        "layout": "vertical",
+        "width": "40px",
+        "height": "40px",
+        "cornerRadius": "20px",
+        "backgroundColor": "#DFF5EA",
+        "justifyContent": "center",
+        "alignItems": "center",
+        "flex": 0,
+        "contents": [
+            {
+                "type": "text",
+                "text": letter,
+                "align": "center",
+                "gravity": "center",
+                "color": "#128A4E",
+                "weight": "bold",
+            }
+        ],
+    }
 
 
 def party_card(people, change=None):
     """Build a card (Flex Message) listing who is going to the party."""
+    count = len(people)
     rows = []
 
-    # A line showing who changed their mind
     if change:
         rows.append({
             "type": "text",
@@ -66,44 +107,79 @@ def party_card(people, change=None):
             "color": change["color"],
             "size": "sm",
             "wrap": True,
+            "margin": "md",
         })
 
-    # One row per person: picture + name (show at most 20 people)
     for person in people[:20]:
-        picture = person["picture_url"]
-        if picture.startswith("https://"):
-            avatar = {"type": "image", "url": picture, "size": "xxs", "flex": 0}
-        else:
-            avatar = {"type": "text", "text": "👤", "flex": 0}
         rows.append({
             "type": "box",
             "layout": "horizontal",
             "spacing": "md",
-            "margin": "md",
+            "alignItems": "center",
+            "margin": "lg",
             "contents": [
-                avatar,
-                {"type": "text", "text": person["user_name"], "size": "sm", "wrap": True},
+                _avatar(person),
+                {
+                    "type": "text",
+                    "text": person["user_name"] or "สมาชิก",
+                    "weight": "bold",
+                    "size": "md",
+                    "gravity": "center",
+                    "wrap": True,
+                },
             ],
         })
 
-    count = len(people)
     if count == 0:
-        rows.append({"type": "text", "text": "ยังไม่มีผู้เข้าร่วม", "color": "#777777"})
+        rows.append({
+            "type": "text",
+            "text": "ยังไม่มีผู้เข้าร่วม",
+            "size": "sm",
+            "color": "#8A8A8A",
+            "margin": "md",
+        })
     elif count > 20:
-        rows.append({"type": "text", "text": f"และอีก {count - 20} คน", "size": "sm"})
+        rows.append({
+            "type": "text",
+            "text": f"และอีก {count - 20} คน",
+            "size": "sm",
+            "color": "#8A8A8A",
+            "margin": "lg",
+        })
 
     title = f"ผู้เข้าร่วมทั้งหมด {count} คน"
     card = {
         "type": "bubble",
+        "size": "mega",
         "header": {
             "type": "box",
             "layout": "vertical",
-            "backgroundColor": "#08A980",
+            "paddingAll": "18px",
+            "background": {
+                "type": "linearGradient",
+                "angle": "0deg",
+                "startColor": "#14C86A",
+                "endColor": "#12C3D4",
+            },
             "contents": [
-                {"type": "text", "text": title, "color": "#FFFFFF", "size": "lg", "weight": "bold"}
+                {
+                    "type": "text",
+                    "text": title,
+                    "color": "#FFFFFF",
+                    "weight": "bold",
+                    "size": "lg",
+                    "wrap": True,
+                }
             ],
         },
-        "body": {"type": "box", "layout": "vertical", "contents": rows},
+        "body": {
+            "type": "box",
+            "layout": "vertical",
+            "paddingAll": "16px",
+            "paddingTop": "4px",
+            "backgroundColor": "#FFFFFF",
+            "contents": rows,
+        },
     }
     return FlexMessage(alt_text=title, contents=FlexContainer.from_dict(card))
 
@@ -121,6 +197,10 @@ def handle_message(event):
     group_id = event.source.group_id
     user_id = event.source.user_id
     text = event.message.text.strip()
+
+    if text == ".":
+        reset()
+        return
 
     if text in ("+1", "-1") and user_id:
         # Get the sender's name and picture; use defaults if that fails
