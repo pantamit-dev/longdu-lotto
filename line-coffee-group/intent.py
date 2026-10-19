@@ -63,7 +63,7 @@ def _picked(answer, skip: str | None = None) -> str | None:
     return choice
 
 
-def read_message(user_text: str) -> dict:
+def jev_classify_intent(user_text: str) -> dict:
     """Read intent and, when it is an order, which menu item, quantity, and note."""
     try:
         result = _jev().system_one(

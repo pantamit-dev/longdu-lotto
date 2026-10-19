@@ -8,12 +8,7 @@ from linebot.v3.exceptions import InvalidSignatureError
 from linebot.v3.messaging import (
     ApiClient,
     Configuration,
-    FlexContainer,
-    FlexMessage,
     MessagingApi,
-    PostbackAction,
-    QuickReply,
-    QuickReplyItem,
     ReplyMessageRequest,
     TextMessage,
 )
@@ -27,7 +22,8 @@ from linebot.v3.webhooks import (
 )
 
 import coffee_shop as shop
-from intent import CONFIDENCE_THRESHOLD, read_message, shop_answer
+from flex_mesage import confirm_reply, menu_flex, order_card
+from intent import CONFIDENCE_THRESHOLD, jev_classify_intent, shop_answer
 
 load_dotenv()
 
@@ -87,188 +83,11 @@ def sender(source) -> tuple[str, str]:
         return "ลูกค้า", ""
 
 
-def send(event, messages) -> None:
+def reply_with_flex_msg(event, messages) -> None:
     if not getattr(event, "reply_token", None):
         return
     line_bot_api.reply_message(
         ReplyMessageRequest(reply_token=event.reply_token, messages=messages)
-    )
-
-
-def confirm_reply() -> QuickReply:
-    return QuickReply(
-        items=[
-            QuickReplyItem(
-                action=PostbackAction(
-                    label="ยืนยันส่งออเดอร์",
-                    data="confirm",
-                    display_text="ยืนยันส่งออเดอร์",
-                )
-            ),
-            QuickReplyItem(
-                action=PostbackAction(
-                    label="ยกเลิก",
-                    data="cancel",
-                    display_text="ยกเลิกออเดอร์",
-                )
-            ),
-        ]
-    )
-
-
-def _avatar(person: dict) -> dict:
-    picture = person.get("picture_url") or ""
-    if picture.startswith("https://"):
-        return {
-            "type": "box",
-            "layout": "vertical",
-            "width": "40px",
-            "height": "40px",
-            "cornerRadius": "20px",
-            "flex": 0,
-            "contents": [
-                {
-                    "type": "image",
-                    "url": picture,
-                    "size": "full",
-                    "aspectMode": "cover",
-                    "aspectRatio": "1:1",
-                }
-            ],
-        }
-    letter = (person.get("user_name") or "ล")[:1]
-    return {
-        "type": "box",
-        "layout": "vertical",
-        "width": "40px",
-        "height": "40px",
-        "cornerRadius": "20px",
-        "backgroundColor": "#DFF5EA",
-        "justifyContent": "center",
-        "alignItems": "center",
-        "flex": 0,
-        "contents": [
-            {
-                "type": "text",
-                "text": letter,
-                "align": "center",
-                "gravity": "center",
-                "color": "#128A4E",
-                "weight": "bold",
-            }
-        ],
-    }
-
-
-def _member_row(person: dict) -> dict:
-    return {
-        "type": "box",
-        "layout": "horizontal",
-        "spacing": "md",
-        "alignItems": "center",
-        "margin": "lg",
-        "contents": [
-            _avatar(person),
-            {
-                "type": "box",
-                "layout": "vertical",
-                "flex": 1,
-                "contents": [
-                    {
-                        "type": "text",
-                        "text": person["user_name"] or "ลูกค้า",
-                        "weight": "bold",
-                        "size": "sm",
-                        "wrap": True,
-                    },
-                    {
-                        "type": "text",
-                        "text": shop.drink_label(person),
-                        "size": "xs",
-                        "color": "#8A8A8A",
-                        "wrap": True,
-                        "margin": "xs",
-                    },
-                ],
-            },
-        ],
-    }
-
-
-def order_card(order: dict, change: dict | None = None):
-    """Order summary card. A gray banner appears when someone edits their drink."""
-    items = order["items"]
-    if not items:
-        return TextMessage(text=shop.summary_text(order)[:5000])
-
-    rows = []
-    if change:
-        rows.append({
-            "type": "box",
-            "layout": "horizontal",
-            "backgroundColor": "#F2F3F5",
-            "paddingAll": "12px",
-            "cornerRadius": "8px",
-            "alignItems": "center",
-            "contents": [
-                {
-                    "type": "text",
-                    "text": f"{change['user_name']} เปลี่ยนใจ",
-                    "size": "sm",
-                    "color": "#333333",
-                    "flex": 0,
-                },
-                {
-                    "type": "text",
-                    "text": change["after"],
-                    "size": "sm",
-                    "color": "#E53935",
-                    "weight": "bold",
-                    "margin": "sm",
-                    "wrap": True,
-                },
-            ],
-        })
-    for person in items:
-        rows.append(_member_row(person))
-
-    title = f"ออเดอร์ทั้งหมด {len(items)} รายการ"
-    card = {
-        "type": "bubble",
-        "size": "mega",
-        "header": {
-            "type": "box",
-            "layout": "vertical",
-            "paddingAll": "18px",
-            "background": {
-                "type": "linearGradient",
-                "angle": "0deg",
-                "startColor": "#14C86A",
-                "endColor": "#12C3D4",
-            },
-            "contents": [
-                {
-                    "type": "text",
-                    "text": title,
-                    "color": "#FFFFFF",
-                    "weight": "bold",
-                    "size": "lg",
-                    "wrap": True,
-                }
-            ],
-        },
-        "body": {
-            "type": "box",
-            "layout": "vertical",
-            "paddingAll": "16px",
-            "backgroundColor": "#FFFFFF",
-            "contents": rows,
-        },
-    }
-    return FlexMessage(
-        alt_text=shop.summary_text(order)[:400],
-        contents=FlexContainer.from_dict(card),
-        quick_reply=confirm_reply(),
     )
 
 
@@ -296,7 +115,7 @@ def _save_order(event, cid, user_id, name, picture, drink: dict):
     prompt = _detail_prompt(drink)
     if prompt:
         quick_reply = confirm_reply() if shop.open_order(cid)["items"] else None
-        send(event, [TextMessage(text=prompt, quick_reply=quick_reply)])
+        reply_with_flex_msg(event, [TextMessage(text=prompt, quick_reply=quick_reply)])
         return
     result = shop.save_message_order(
         cid,
@@ -312,14 +131,14 @@ def _save_order(event, cid, user_id, name, picture, drink: dict):
     status = result["status"]
     if status == "ignore":
         quick_reply = confirm_reply() if shop.open_order(cid)["items"] else None
-        send(event, [TextMessage(text=ASK_ORDER, quick_reply=quick_reply)])
+        reply_with_flex_msg(event, [TextMessage(text=ASK_ORDER, quick_reply=quick_reply)])
         return
     if status == "stale":
         return
     if status != "success":
-        send(event, [TextMessage(text=result.get("message", "จดออเดอร์ไม่ได้")[:5000])])
+        reply_with_flex_msg(event, [TextMessage(text=result.get("message", "จดออเดอร์ไม่ได้")[:5000])])
         return
-    send(event, [order_card(result["order"])])
+    reply_with_flex_msg(event, [order_card(result["order"])])
 
 
 def _edit_order(event, cid, user_id, name, picture, drink: dict):
@@ -341,11 +160,11 @@ def _edit_order(event, cid, user_id, name, picture, drink: dict):
         return
     status = result.get("status")
     if status == "error":
-        send(event, [TextMessage(text=result["message"][:5000])])
+        reply_with_flex_msg(event, [TextMessage(text=result["message"][:5000])])
         return
     if status != "success":
         return
-    send(event, [order_card(result["order"], result.get("change"))])
+    reply_with_flex_msg(event, [order_card(result["order"], result.get("change"))])
 
 
 @handler.add(MessageEvent, message=TextMessageContent)
@@ -363,7 +182,7 @@ def handle_message(event):
     user_id = getattr(event.source, "user_id", None) or name
 
     # Jev reads the message: intent, and which menu item to put on the order.
-    reading = read_message(text)
+    reading = jev_classify_intent(text)
     if isinstance(event, MessageEditedEvent):
         _edit_order(event, cid, user_id, name, picture, reading)
         return
@@ -371,12 +190,16 @@ def handle_message(event):
     intent, confidence = reading["intent"], reading["confidence"]
     if confidence >= CONFIDENCE_THRESHOLD:
         if intent == "summary":
-            send(event, [order_card(shop.open_order(cid))])
+            reply_with_flex_msg(event, [order_card(shop.open_order(cid))])
+            return
+        if intent == "view_menu":
+            quick_reply = confirm_reply() if shop.open_order(cid)["items"] else None
+            reply_with_flex_msg(event, [menu_flex(quick_reply)])
             return
         answer = shop_answer(intent)
         if answer:
             quick_reply = confirm_reply() if shop.open_order(cid)["items"] else None
-            send(event, [TextMessage(text=answer[:5000], quick_reply=quick_reply)])
+            reply_with_flex_msg(event, [TextMessage(text=answer[:5000], quick_reply=quick_reply)])
             return
         if intent == "order":
             if not shop.round_is_open(cid):
@@ -389,7 +212,7 @@ def handle_message(event):
             _save_order(event, cid, user_id, name, picture, reading)
             return
         quick_reply = confirm_reply() if shop.open_order(cid)["items"] else None
-        send(event, [TextMessage(text=ASK_ORDER, quick_reply=quick_reply)])
+        reply_with_flex_msg(event, [TextMessage(text=ASK_ORDER, quick_reply=quick_reply)])
         return
 
 
@@ -414,4 +237,4 @@ def handle_postback(event):
         text = "ยกเลิกออเดอร์ที่ยังไม่ส่งแล้ว" if result["count"] else "ไม่มีออเดอร์ค้าง"
     else:
         return
-    send(event, [TextMessage(text=text[:5000])])
+    reply_with_flex_msg(event, [TextMessage(text=text[:5000])])
