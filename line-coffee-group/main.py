@@ -36,7 +36,7 @@ line_bot_api = MessagingApi(
     ApiClient(Configuration(access_token=os.environ["LINE_CHANNEL_ACCESS_TOKEN"]))
 )
 
-ASK_ORDER = "พิมพ์ชื่อกาแฟที่ต้องการได้เลย เช่น อเมริกาโน่ หรือ ชาเขียวหวานน้อย"
+ASK_ORDER = "พิมพ์ชื่อกาแฟ จำนวนแก้ว และความหวาน เช่น อเมริกาโน่ 1 แก้ว หวานน้อย"
 
 
 @functions_framework.http
@@ -272,8 +272,32 @@ def order_card(order: dict, change: dict | None = None):
     )
 
 
+def _detail_prompt(drink: dict) -> str | None:
+    """Ask for cup count and sweetness before a new order is saved."""
+    item = drink.get("item") or ""
+    if not item:
+        return None
+    name = shop.DISPLAY.get(item, item)
+    qty = drink.get("qty")
+    sweet = (drink.get("note") or "").strip()
+    if sweet not in shop.SWEETNESS:
+        sweet = ""
+    if qty and sweet:
+        return None
+    if not qty and not sweet:
+        return f"สั่ง{name}กี่แก้ว และหวานระดับไหน เช่น 1 แก้ว หวานน้อย"
+    if not qty:
+        return f"สั่ง{name} {sweet} กี่แก้ว"
+    return f"{name} {qty} แก้ว หวานระดับไหน เช่น หวานน้อย หวานปานกลาง หวานมาก"
+
+
 def _save_order(event, cid, user_id, name, picture, drink: dict):
-    """Save the drink Jev picked. If none was picked, ask for a menu name."""
+    """Save the drink Jev picked. Cup count and sweetness are required."""
+    prompt = _detail_prompt(drink)
+    if prompt:
+        quick_reply = confirm_reply() if shop.open_order(cid)["items"] else None
+        send(event, [TextMessage(text=prompt, quick_reply=quick_reply)])
+        return
     result = shop.save_message_order(
         cid,
         user_id,
@@ -282,8 +306,8 @@ def _save_order(event, cid, user_id, name, picture, drink: dict):
         event.message.id,
         event.timestamp or 0,
         picture,
-        drink["qty"] or 1,
-        drink["note"] or "",
+        drink["qty"],
+        drink["note"],
     )
     status = result["status"]
     if status == "ignore":
@@ -300,6 +324,7 @@ def _save_order(event, cid, user_id, name, picture, drink: dict):
 
 def _edit_order(event, cid, user_id, name, picture, drink: dict):
     """An edit updates the drink already tied to that message."""
+    note = (drink.get("note") or "").strip()
     result = shop.edit_message_order(
         cid,
         user_id,
@@ -309,8 +334,11 @@ def _edit_order(event, cid, user_id, name, picture, drink: dict):
         event.timestamp or 0,
         picture,
         drink["qty"],
-        drink["note"],
+        note if note in shop.SWEETNESS else None,
     )
+    if result.get("status") == "missing":
+        _save_order(event, cid, user_id, name, picture, drink)
+        return
     status = result.get("status")
     if status == "error":
         send(event, [TextMessage(text=result["message"][:5000])])
@@ -366,10 +394,7 @@ def handle_message(event):
 
 
 def order_lines(items: list[dict], total: float) -> str:
-    lines = []
-    for row in items:
-        extra = f" ({row['note']})" if row["note"] else ""
-        lines.append(f"{row['item']} x{row['qty']}{extra}")
+    lines = [shop.drink_label(row) for row in items]
     lines.append(f"รวม {total:.0f} บาท")
     return "\n".join(lines)
 

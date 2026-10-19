@@ -35,12 +35,15 @@ DISPLAY = {
     "อเมริกาโน": "อเมริกาโน่",
 }
 
-NOTES = (
-    "หวานปานกลาง",
+SWEETNESS = (
     "หวานน้อย",
-    "หวานมาก",
+    "หวานปานกลาง",
     "หวานปกติ",
+    "หวานมาก",
     "ไม่หวาน",
+)
+
+NOTES = SWEETNESS + (
     "ไม่ใส่นม",
     "ไม่ใส่น้ำแข็ง",
     "น้ำแข็งน้อย",
@@ -190,12 +193,15 @@ def _row(row: sqlite3.Row) -> dict:
 
 
 def drink_label(row: dict) -> str:
+    """อเมริกาโน่ - หวานน้อย - x2 แก้ว."""
     drink = DISPLAY.get(row["item"], row["item"])
-    if row.get("note"):
-        drink = f"{drink} {row['note']}"
-    if row.get("qty", 1) > 1:
-        drink = f"{drink} x{row['qty']}"
-    return drink
+    qty = int(row.get("qty") or 1)
+    note = (row.get("note") or "").strip()
+    parts = [drink]
+    if note:
+        parts.append(note)
+    parts.append(f"x{qty} แก้ว")
+    return " - ".join(parts)
 
 
 def list_menu() -> dict:

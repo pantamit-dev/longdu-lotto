@@ -88,10 +88,10 @@ def read_message(user_text: str) -> dict:
                     },
                 ),
                 "note": Choice(
-                    instructions="ความหวานหรือหมายเหตุของแก้วนี้ ถ้าไม่ได้ระบุให้เลือก none",
+                    instructions="ระดับความหวานของแก้วนี้ ถ้าไม่ได้ระบุให้เลือก none",
                     criteria={
-                        **{note: note for note in shop.NOTES},
-                        "none": "ไม่ได้ระบุความหวานหรือหมายเหตุ",
+                        **{level: level for level in shop.SWEETNESS},
+                        "none": "ไม่ได้ระบุความหวาน",
                     },
                 ),
             },
