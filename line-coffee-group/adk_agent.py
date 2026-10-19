@@ -1,4 +1,4 @@
-"""ผู้ช่วยร้านกาแฟ: tools บาง ๆ + agent + ฟังก์ชันตอบกลับ."""
+"""Coffee shop assistant: thin tools + agent + reply function."""
 
 import asyncio
 from contextvars import ContextVar
@@ -19,24 +19,24 @@ _chat: ContextVar[str] = ContextVar("chat", default="playground")
 
 
 def list_menu() -> dict:
-    """รายการเครื่องดื่มและราคา."""
+    """List drinks and prices."""
     return shop.list_menu()
 
 
 def add_item(item: str, qty: int = 1, note: str = "") -> dict:
-    """จดเครื่องดื่มที่ลูกค้าสั่ง ยังไม่ส่งร้าน. note เช่น หวานน้อย ไม่ใส่นม."""
+    """Note down a drink the customer ordered (not sent to the shop yet). note e.g. less sweet, no milk."""
     return shop.add_item(_chat.get(), _customer.get(), item, qty, note)
 
 
 def show_order() -> dict:
-    """ออเดอร์ที่จดไว้และยังไม่กดยืนยัน."""
+    """Show the noted order that has not been confirmed yet."""
     return shop.open_order(_chat.get())
 
 
 def update_item(order_id: int, item: str = "", qty: int = -1) -> dict:
-    """แก้รายการที่จดไว้แล้วยังไม่ยืนยัน. ใช้ id จาก show_order.
-    item คือชื่อเมนูใหม่ ว่างไว้ถ้าไม่เปลี่ยนชื่อ.
-    qty คือจำนวนแก้วใหม่ทั้งก้อน เช่น แก้เป็น 2 ให้ใส่ 2. ใส่ -1 ถ้าไม่เปลี่ยนจำนวน.
+    """Edit an unconfirmed item. Use the id from show_order.
+    item is the new menu name; leave empty to keep the name.
+    qty is the new total number of cups, e.g. to change it to 2, pass 2. Pass -1 to keep the quantity.
     """
     return shop.update_item(
         _chat.get(),
@@ -47,7 +47,7 @@ def update_item(order_id: int, item: str = "", qty: int = -1) -> dict:
 
 
 def remove_item(order_id: int) -> dict:
-    """เอารายการที่ยังไม่ยืนยันออก ด้วย id จาก show_order."""
+    """Remove an unconfirmed item by its id from show_order."""
     return shop.remove_item(_chat.get(), order_id)
 
 

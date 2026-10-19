@@ -42,7 +42,7 @@ line_bot_api = MessagingApi(ApiClient(configuration))
 
 
 def normalize_webhook(body: str) -> str:
-    """เติม quoteToken ที่ SDK ต้องใช้ เมื่อ messageEdited ไม่ได้ส่งฟิลด์นี้มา."""
+    """Add the quoteToken the SDK requires when a messageEdited event omits it."""
     try:
         payload = json.loads(body)
     except json.JSONDecodeError:
@@ -245,7 +245,7 @@ def _member_row(row: dict) -> dict:
 
 
 def order_card(order: dict, change: dict | None = None):
-    """การ์ดสรุปออเดอร์ หัวเขียวไล่สี และแถบเปลี่ยนใจเมื่อแก้ข้อความเดิม."""
+    """Order summary card with a green gradient header, plus a change-of-mind banner when a message is edited."""
     items = order["items"]
     if not items:
         return TextMessage(text=shop.summary_text(order)[:5000])

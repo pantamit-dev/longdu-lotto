@@ -1,7 +1,7 @@
-"""เมนูและออเดอร์ร้านกาแฟ เก็บลง SQLite.
+"""Coffee shop menu and orders, stored in SQLite.
 
-รายการที่ลูกค้าสั่งถูกจดไว้สถานะ open ก่อน
-จะถูกส่งร้านเมื่อกดปุ่มยืนยัน (postback confirm) เท่านั้น
+Ordered items are first saved with status open, and are sent
+to the shop only when the confirm button (postback confirm) is pressed.
 """
 
 import contextlib
@@ -290,7 +290,7 @@ def update_item(
     qty: int | None = None,
     note: str | None = None,
 ) -> dict:
-    """แก้รายการที่ยังไม่ยืนยัน. qty คือจำนวนใหม่ทั้งก้อน ไม่ใช่จำนวนที่บวกเพิ่ม."""
+    """Edit an unconfirmed item. qty is the new total, not an amount to add."""
     with connect() as conn:
         row = conn.execute(
             "SELECT * FROM orders WHERE chat_id = ? AND id = ? AND status = 'open'",
@@ -362,7 +362,7 @@ def update_item(
 
 
 def apply_user_order(chat_id: str, user_id: str, user_name: str, parsed: dict) -> dict:
-    """คนเดิมที่มีรายการอยู่แล้วคือการแก้ คนใหม่หรือสั่งเพิ่มคือการเพิ่มเมนู."""
+    """A person who already has an item edits it; a new person, or an explicit extra order, adds an item."""
     own = [row for row in open_order(chat_id)["items"] if row["user_id"] == user_id]
     if own and not parsed["force_add"]:
         target = own[-1]
@@ -425,7 +425,7 @@ def save_message_order(
     timestamp: int,
     picture_url: str = "",
 ) -> dict:
-    """จดออเดอร์จาก MessageEvent โดยผูกกับ message id ของข้อความนั้น."""
+    """Record an order from a MessageEvent, linked to that message's id."""
     parsed = parse_order(text)
     if parsed is None or not parsed["item"]:
         return {"status": "ignore"}
@@ -461,9 +461,9 @@ def edit_message_order(
     timestamp: int,
     picture_url: str = "",
 ) -> dict:
-    """อัปเดตออเดอร์เดิมเมื่อ LINE ส่ง messageEdited ของ message id เดียวกัน.
+    """Update the existing order when LINE sends messageEdited for the same message id.
 
-    เหตุการณ์ที่ timestamp ไม่ใหม่กว่าค่าที่เก็บไว้จะไม่ทับสถานะล่าสุด
+    Events whose timestamp is not newer than the stored one do not overwrite the latest state.
     """
     row = _by_message(chat_id, message_id)
     if row is None:
