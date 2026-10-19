@@ -188,6 +188,7 @@ def _row(row: sqlite3.Row) -> dict:
         "message_id": row["message_id"] if "message_id" in row.keys() else "",
         "edited_at": row["edited_at"] if "edited_at" in row.keys() else 0,
         "picture_url": row["picture_url"] if "picture_url" in row.keys() else "",
+        "status": row["status"] if "status" in row.keys() else "open",
         "line_total": round(row["qty"] * row["unit_price"], 2),
     }
 
@@ -402,14 +403,36 @@ def _touch(order_id: int, timestamp: int) -> None:
         )
 
 
-def _by_message(chat_id: str, message_id: str) -> dict | None:
+def order_by_message(chat_id: str, message_id: str) -> dict | None:
+    """The order row tied to a LINE message, including one already sent to the shop."""
+    if not message_id:
+        return None
     with connect() as conn:
         row = conn.execute(
-            """SELECT * FROM orders
-               WHERE chat_id = ? AND message_id = ? AND status = 'open'""",
+            "SELECT * FROM orders WHERE chat_id = ? AND message_id = ?",
             (chat_id, message_id),
         ).fetchone()
-        return None if row is None else _row(row)
+    return None if row is None else _row(row)
+
+
+def _by_message(chat_id: str, message_id: str) -> dict | None:
+    row = order_by_message(chat_id, message_id)
+    if row is None or row["status"] != "open":
+        return None
+    return row
+
+
+def remove_message_order(chat_id: str, message_id: str) -> dict:
+    """Drop the open order that came from this message. A sent order stays."""
+    row = _by_message(chat_id, message_id)
+    if row is None:
+        return {"status": "missing"}
+    with connect() as conn:
+        conn.execute("DELETE FROM orders WHERE id = ?", (row["id"],))
+    order = open_order(chat_id)
+    if not order["items"]:
+        close_round(chat_id)
+    return {"status": "success", "removed": row, "order": order}
 
 
 def _set_picture(order_id: int, picture_url: str) -> None:

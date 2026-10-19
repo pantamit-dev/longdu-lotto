@@ -15,19 +15,7 @@ INTENT_CRITERIA = {
     "order": "สั่งเครื่องดื่ม หรือบอกชื่อกาแฟ จำนวน ความหวาน เช่น สั่งกาแฟ, อเมริกาโน่, ลาเต้ 2 แก้วหวานน้อย",
     "summary": "ขอดูออเดอร์ที่จดไว้ เช่น สรุปออเดอร์, สรุป, ดูออเดอร์",
     "view_menu": "อยากดูเมนูกาแฟของร้าน BEAT COFFEE หรือถามว่ามีกาแฟอะไรบ้าง เช่น ขอดูเมนูกาแฟ, มีกาแฟ BEAT COFFEE อะไรบ้าง",
-    "store_hours": "ถามเวลาเปิดหรือปิดร้าน BEAT COFFEE เช่น ร้านเปิดกี่โมง, วันนี้ปิดกี่โมง",
-    "promotion": "ถามโปรโมชั่น ส่วนลด หรือการสะสมแต้ม เช่น มีโปรอะไรบ้าง, ตอนนี้มีส่วนลดไหม, สะสมครบ 10 ฟรีไหม",
-    "location": "ถามตำแหน่งร้าน เช่น ร้านอยู่ที่ไหน, ร้านอยู่ที่กรุงเทพมหานครหรือสุรินทร์",
-    "contact": "ถามวิธีติดต่อร้าน เช่น วิธีติดต่อร้าน, โทรศัพท์ร้าน",
-    "other": "ข้อความอื่นที่ไม่ใช่การสั่งเครื่องดื่ม การดูออเดอร์ เมนู เวลาเปิดร้าน โปรโมชั่น การสะสมแต้ม ที่ตั้งร้าน หรือการติดต่อ",
-}
-
-# Facts the bot can say without asking a language model. Edit these to match the shop.
-REPLIES = {
-    "store_hours": "BEAT COFFEE เปิดทุกวัน 08:00-20:00 น.",
-    "promotion": "สะสมครบ 10 แก้ว ฟรี 1 แก้ว",
-    "location": "BEAT COFFEE มีสาขาที่กรุงเทพมหานครและสุรินทร์",
-    "contact": "ทักสั่งและสอบถามได้ในแชท LINE นี้",
+    "other": "ข้อความอื่นที่ไม่ใช่การสั่งเครื่องดื่ม การดูออเดอร์ หรือการขอดูเมนู",
 }
 
 _client: TypeSafeClient | None = None
@@ -63,8 +51,8 @@ def _picked(answer, skip: str | None = None) -> str | None:
     return choice
 
 
-def jev_classify_intent(user_text: str) -> dict:
-    """Read intent and, when it is an order, which menu item, quantity, and note."""
+def jev_classify_intent(user_text: str) -> str:
+    """Return the intent name. A low-confidence read comes back as other."""
     try:
         result = _jev().system_one(
             state={"channel": "line", "message": user_text},
@@ -76,6 +64,23 @@ def jev_classify_intent(user_text: str) -> dict:
                     ),
                     criteria=INTENT_CRITERIA,
                 ),
+            },
+        )
+    except Exception:
+        return "other"
+
+    intent = result.choices.get("intent")
+    if intent is None or float(intent.confidence or 0) < CONFIDENCE_THRESHOLD:
+        return "other"
+    return intent.choice or "other"
+
+
+def jev_read_order(user_text: str) -> dict:
+    """Read the menu item, cup count, and sweetness from an order message."""
+    try:
+        result = _jev().system_one(
+            state={"channel": "line", "message": user_text},
+            questions={
                 "item": Choice(
                     instructions="ลูกค้าสั่งเครื่องดื่มรายการไหนจากเมนู ถ้าไม่ได้สั่งให้เลือก none",
                     criteria=_item_criteria(),
@@ -83,7 +88,7 @@ def jev_classify_intent(user_text: str) -> dict:
                 "qty": Choice(
                     instructions="จำนวนแก้วที่สั่งในข้อความนี้ ถ้าไม่ได้บอกจำนวนให้เลือก unspecified",
                     criteria={
-                        "unspecified": "ไม่ได้บอกจำนวนแก้ว",
+                        "unspecified": "ไม่ได้บอกจำนวนแก้ว นับเป็น 1 แก้ว",
                         **{str(n): f"{n} แก้ว" for n in range(1, 11)},
                     },
                 ),
@@ -91,31 +96,20 @@ def jev_classify_intent(user_text: str) -> dict:
                     instructions="ระดับความหวานของแก้วนี้ ถ้าไม่ได้ระบุให้เลือก none",
                     criteria={
                         **{level: level for level in shop.SWEETNESS},
-                        "none": "ไม่ได้ระบุความหวาน",
+                        "none": "ไม่ได้ระบุความหวาน ให้ถือว่าหวานปกติ",
                     },
                 ),
             },
         )
     except Exception:
-        return {"intent": "other", "confidence": 0.0, "item": None, "qty": None, "note": None}
+        return {"item": None, "qty": 1, "note": "หวานปกติ"}
 
-    intent = result.choices.get("intent")
-    item = _picked(result.choices.get("item"), skip="none")
-    qty_choice = _picked(result.choices.get("qty"), skip="unspecified")
     note = _picked(result.choices.get("note"))
-    if note == "none":
-        note = ""
+    if not note or note == "none":
+        note = "หวานปกติ"
+    qty_choice = _picked(result.choices.get("qty"), skip="unspecified")
     return {
-        "intent": intent.choice if intent is not None else "other",
-        "confidence": float(intent.confidence or 0) if intent is not None else 0.0,
-        "item": item,
-        "qty": int(qty_choice) if qty_choice else None,
+        "item": _picked(result.choices.get("item"), skip="none"),
+        "qty": int(qty_choice) if qty_choice else 1,
         "note": note,
     }
-
-
-def shop_answer(intent: str) -> str | None:
-    """Text for a shop question. An order is not answered here."""
-    if intent == "view_menu":
-        return shop.menu_text()
-    return REPLIES.get(intent)

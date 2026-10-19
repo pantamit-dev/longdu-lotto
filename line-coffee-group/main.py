@@ -23,7 +23,7 @@ from linebot.v3.webhooks import (
 
 import coffee_shop as shop
 from flex_mesage import confirm_reply, menu_flex, order_card
-from intent import CONFIDENCE_THRESHOLD, jev_classify_intent, shop_answer
+from jev_intent import jev_classify_intent, jev_read_order
 
 load_dotenv()
 
@@ -62,7 +62,7 @@ def chat_id(source) -> str:
     return source.user_id
 
 
-def sender(source) -> tuple[str, str]:
+def get_user_profile(source) -> tuple[str, str]:
     """Display name and picture. Falls back to ลูกค้า when LINE has no profile."""
     user_id = getattr(source, "user_id", None)
     if not user_id:
@@ -142,20 +142,35 @@ def _save_order(event, cid, user_id, name, picture, drink: dict):
 
 
 def _edit_order(event, cid, user_id, name, picture, drink: dict):
-    """An edit updates the drink already tied to that message."""
-    note = (drink.get("note") or "").strip()
+    """Rewrite the open order tied to this message so it matches the edited text."""
+    message_id = event.message.id
+    linked = shop.order_by_message(cid, message_id)
+    if linked and linked["status"] != "open":
+        reply_with_flex_msg(event, [TextMessage(text="ออเดอร์นี้ส่งร้านแล้ว แก้ข้อความไม่เปลี่ยนรายการ")])
+        return
+
+    sweet = (drink.get("note") or "").strip()
+    if sweet not in shop.SWEETNESS:
+        sweet = None
+    item = drink.get("item") or ""
+    qty = drink.get("qty")
+    if not item and qty is None and sweet is None:
+        return
+
     result = shop.edit_message_order(
         cid,
         user_id,
         name,
-        drink["item"] or "",
-        event.message.id,
+        item,
+        message_id,
         event.timestamp or 0,
         picture,
-        drink["qty"],
-        note if note in shop.SWEETNESS else None,
+        qty,
+        sweet,
     )
     if result.get("status") == "missing":
+        if not shop.round_is_open(cid):
+            shop.open_round(cid)
         _save_order(event, cid, user_id, name, picture, drink)
         return
     status = result.get("status")
@@ -168,52 +183,48 @@ def _edit_order(event, cid, user_id, name, picture, drink: dict):
 
 
 @handler.add(MessageEvent, message=TextMessageContent)
-@handler.add(MessageEditedEvent)
 def handle_message(event):
-    """Runs every time someone sends or edits a message."""
+    """Runs every time someone sends a message."""
     if not isinstance(event.message, TextMessageContent):
         return
-    if not getattr(event, "reply_token", None):
+    text = (event.message.text or "").strip()
+    if not text:
         return
 
     cid = chat_id(event.source)
-    text = event.message.text.strip()
-    name, picture = sender(event.source)
-    user_id = getattr(event.source, "user_id", None) or name
+    name, picture = get_user_profile(event.source)
+    user_id = event.source.user_id
 
-    # Jev reads the message: intent, and which menu item to put on the order.
-    reading = jev_classify_intent(text)
-    if isinstance(event, MessageEditedEvent):
-        _edit_order(event, cid, user_id, name, picture, reading)
+    intent = jev_classify_intent(text)
+    if intent == "summary":
+        reply_with_flex_msg(event, [order_card(shop.open_order(cid))])
         return
-
-    intent, confidence = reading["intent"], reading["confidence"]
-    if confidence >= CONFIDENCE_THRESHOLD:
-        if intent == "summary":
-            reply_with_flex_msg(event, [order_card(shop.open_order(cid))])
-            return
-        if intent == "view_menu":
-            quick_reply = confirm_reply() if shop.open_order(cid)["items"] else None
-            reply_with_flex_msg(event, [menu_flex(quick_reply)])
-            return
-        answer = shop_answer(intent)
-        if answer:
-            quick_reply = confirm_reply() if shop.open_order(cid)["items"] else None
-            reply_with_flex_msg(event, [TextMessage(text=answer[:5000], quick_reply=quick_reply)])
-            return
-        if intent == "order":
-            if not shop.round_is_open(cid):
-                shop.open_round(cid)
-            _save_order(event, cid, user_id, name, picture, reading)
-            return
-
-    if shop.round_is_open(cid):
-        if reading["item"]:
-            _save_order(event, cid, user_id, name, picture, reading)
-            return
+    if intent == "view_menu":
         quick_reply = confirm_reply() if shop.open_order(cid)["items"] else None
-        reply_with_flex_msg(event, [TextMessage(text=ASK_ORDER, quick_reply=quick_reply)])
+        reply_with_flex_msg(event, [menu_flex(quick_reply)])
         return
+    if intent == "order":
+        if not shop.round_is_open(cid):
+            shop.open_round(cid)
+        _save_order(event, cid, user_id, name, picture, jev_read_order(text))
+        return
+
+
+@handler.add(MessageEditedEvent)
+def handle_edited_message(event):
+    """Runs every time someone edits a message."""
+    if not isinstance(event.message, TextMessageContent):
+        return
+    text = (event.message.text or "").strip()
+    if not text:
+        return
+
+    cid = chat_id(event.source)
+    name, picture = get_user_profile(event.source)
+    user_id = event.source.user_id
+
+    if jev_classify_intent(text) == "order":
+        _edit_order(event, cid, user_id, name, picture, jev_read_order(text))
 
 
 def order_lines(items: list[dict], total: float) -> str:
