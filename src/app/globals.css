@@ -128,3 +128,43 @@
     @apply font-sans;
   }
 }
+
+/* Modern Web Guidance: Safe areas for LINE In-App Webview & Mobile */
+.safe-area-top {
+  padding-top: max(env(safe-area-inset-top, 0px), 12px);
+}
+.safe-area-bottom {
+  padding-bottom: max(env(safe-area-inset-bottom, 16px), 16px);
+}
+
+/* Modern Web Guidance: Dialog and Bottom Sheet pure CSS scroll isolation */
+dialog:modal {
+  overscroll-behavior: contain;
+}
+dialog::backdrop {
+  overflow: hidden;
+  overscroll-behavior: contain;
+}
+
+/* Modern Web Guidance: Instant mobile touch responsiveness & no double-tap zoom delay */
+button, input, select, textarea {
+  touch-action: manipulation;
+}
+
+/* Modern Web Guidance: Form input validation without premature errors */
+input:user-invalid {
+  border-color: #ef4444;
+}
+input:user-valid:focus {
+  border-color: #10b981;
+}
+
+/* Accessibility: Respect user motion preferences */
+@media (prefers-reduced-motion: reduce) {
+  *, ::before, ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
