@@ -177,3 +177,4 @@ CREATE INDEX IF NOT EXISTS idx_tickets_admin_period ON tickets(admin_id, period_
 CREATE INDEX IF NOT EXISTS idx_tickets_ticket_name ON tickets(ticket_name);
 CREATE INDEX IF NOT EXISTS idx_ticket_items_number_bet_type ON ticket_items(number_string, bet_type);
 CREATE INDEX IF NOT EXISTS idx_admin_balances_admin_period ON admin_round_balances(admin_id, period_id);
+

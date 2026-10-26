@@ -71,3 +71,4 @@ export function check3TodWin(betNumber: string, top3Result: string): boolean {
   const sortedResult = top3Result.split('').sort().join('');
   return sortedBet === sortedResult;
 }
+

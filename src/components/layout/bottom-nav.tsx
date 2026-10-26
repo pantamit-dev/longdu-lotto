@@ -9,8 +9,8 @@ export function BottomNav() {
 
   const navItems: { id: LiffTab; label: string; icon: React.ElementType; isCenter?: boolean }[] = [
     { id: "home", label: "หน้าหลัก", icon: Home },
-    { id: "bet", label: "ซื้อหวย", icon: Ticket, isCenter: true },
     { id: "history", label: "โพยของฉัน", icon: FileText },
+    { id: "bet", label: "ซื้อหวย", icon: Ticket, isCenter: true },
     { id: "results", label: "ตรวจผล", icon: Trophy },
     { id: "profile", label: "บัญชี", icon: User },
   ];

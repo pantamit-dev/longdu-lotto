@@ -12,6 +12,7 @@ import {
   Eye,
   Check,
   Zap,
+  Coins,
 } from "lucide-react";
 
 interface TouchNumpadEntryProps {
@@ -127,7 +128,7 @@ export function TouchNumpadEntry({
   };
 
   return (
-    <div className="w-full flex flex-col space-y-3.5 pb-24 select-none">
+    <div className="w-full flex flex-col space-y-3.5 pb-40 select-none">
       {/* 1. Ticket Name Header */}
       <div className="relative bg-slate-900/80 border border-slate-800 rounded-2xl p-3 shadow-sm">
         <div className="flex items-center justify-between text-xs text-slate-400 mb-1.5 font-medium">
@@ -408,34 +409,66 @@ export function TouchNumpadEntry({
         )}
       </div>
 
-      {/* 4. Quick Price Chips */}
-      <div className="flex items-center gap-2 overflow-x-auto py-1">
-        <span className="text-[11px] font-semibold text-slate-400 whitespace-nowrap">
-          ราคา/ตัว:
-        </span>
-        {PRICE_PRESETS.map((p) => (
-          <button
-            key={p}
-            type="button"
-            onClick={() => setPrice(p)}
-            className={cn(
-              "px-3 py-1.5 rounded-xl text-xs font-bold font-mono transition-all tabular-nums border",
-              price === p
-                ? "bg-emerald-600 text-white border-emerald-500 shadow-sm"
-                : "bg-slate-900 text-slate-300 border-slate-800 hover:bg-slate-800"
-            )}
+      {/* 4. Price Section (ตัวเลือกการเพิ่ม & ช่องกรอกราคาด้านล่าง เด่นชัด) */}
+      <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-3.5 space-y-3 shadow-sm">
+        {/* Row 1: ตัวเลือกการเพิ่ม (Quick Presets) */}
+        <div>
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+              <Coins className="w-3.5 h-3.5 text-amber-400" />
+              <span>ตัวเลือกการเพิ่มราคา (Quick Add):</span>
+            </span>
+            <span className="text-[10px] text-slate-400">กดเลือกราคาด่วน</span>
+          </div>
+          <div className="grid grid-cols-4 gap-2">
+            {PRICE_PRESETS.map((p) => (
+              <button
+                key={p}
+                type="button"
+                onClick={() => setPrice(p)}
+                className={cn(
+                  "py-2.5 px-1 rounded-xl text-xs font-bold font-mono transition-all tabular-nums border text-center active:scale-95 shadow-sm",
+                  price === p
+                    ? "bg-emerald-600 text-white border-emerald-400 ring-2 ring-emerald-500/40 shadow-emerald-950 font-extrabold"
+                    : "bg-slate-950 text-slate-200 border-slate-700 hover:bg-slate-800 hover:border-slate-600"
+                )}
+              >
+                +{p}฿
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Row 2: ช่องกรอกราคา อยู่ด้านล่าง ขนาดใหญ่และสีเด่นชัด */}
+        <div>
+          <label
+            htmlFor="custom-price-input"
+            className="text-[11px] font-bold text-slate-300 flex items-center justify-between mb-1.5"
           >
-            +{p}฿
-          </button>
-        ))}
-        <div className="flex items-center ml-auto">
-          <input
-            type="number"
-            value={price || ""}
-            onChange={(e) => setPrice(Math.max(1, parseInt(e.target.value, 10) || 0))}
-            className="w-16 bg-slate-950 border border-slate-700 rounded-xl px-2 py-1 text-xs text-center font-mono font-bold text-white tabular-nums"
-          />
-          <span className="text-xs text-slate-400 ml-1">฿</span>
+            <span>ราคาต่อตัว (บาท/ตัว)</span>
+            <span className="text-[10px] text-emerald-400 font-semibold">
+              ระบุจำนวนเงินที่ต้องการแทง
+            </span>
+          </label>
+          <div className="relative flex items-center">
+            <div className="absolute left-3.5 flex items-center pointer-events-none text-emerald-400 font-extrabold text-xl">
+              ฿
+            </div>
+            <input
+              id="custom-price-input"
+              type="number"
+              min={1}
+              value={price || ""}
+              onChange={(e) => setPrice(Math.max(1, parseInt(e.target.value, 10) || 0))}
+              placeholder="20"
+              className="w-full h-13 bg-slate-950 border-2 border-emerald-500/80 focus:border-emerald-400 focus:ring-4 focus:ring-emerald-500/25 rounded-2xl pl-10 pr-24 text-2xl font-mono font-extrabold text-white placeholder-slate-600 tabular-nums shadow-inner transition-all"
+            />
+            <div className="absolute right-3 flex items-center gap-1.5">
+              <span className="text-xs font-extrabold text-emerald-300 bg-emerald-500/20 border border-emerald-500/40 px-2.5 py-1 rounded-xl shadow-sm">
+                บาท/ตัว
+              </span>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -493,19 +526,22 @@ export function TouchNumpadEntry({
         </button>
       </div>
 
-      {/* 7. Floating Bottom Summary Bar */}
-      <div className="fixed bottom-16 left-0 right-0 max-w-md mx-auto px-4 z-30 pointer-events-none">
-        <div className="bg-slate-900/95 backdrop-blur-md border border-slate-700/80 rounded-2xl p-3 shadow-2xl flex items-center justify-between pointer-events-auto">
+      {/* Spacer between numpad and floating cart bar */}
+      <div className="h-4" aria-hidden="true" />
+
+      {/* 7. Floating Bottom Summary Bar (ยกสูงลอยเด่นเหนือ BottomNav ไม่ถูกบดบัง) */}
+      <div className="fixed bottom-[80px] sm:bottom-[84px] left-0 right-0 max-w-md mx-auto px-4 z-35 pointer-events-none">
+        <div className="bg-slate-900/98 backdrop-blur-lg border border-slate-750 rounded-2xl p-3.5 shadow-[0_-4px_24px_rgba(0,0,0,0.6)] flex items-center justify-between pointer-events-auto ring-1 ring-white/10">
           <div className="flex flex-col">
-            <span className="text-[10px] text-slate-400 font-medium">
+            <span className="text-[11px] text-slate-400 font-medium">
               ตะกร้าโพย ({cartItemCount} รายการ)
             </span>
-            <div className="flex items-baseline gap-1">
-              <span className="text-lg font-bold font-mono text-white tabular-nums">
+            <div className="flex items-baseline gap-1.5 mt-0.5">
+              <span className="text-xl font-bold font-mono text-white tabular-nums">
                 ฿{grossBetTotal.toLocaleString()}
               </span>
-              <span className="text-[11px] text-emerald-400 font-semibold">
-                (ยอดดิบ)
+              <span className="text-[10px] text-emerald-400 font-bold bg-emerald-500/15 border border-emerald-500/30 px-1.5 py-0.5 rounded">
+                ยอดดิบ
               </span>
             </div>
           </div>
@@ -523,3 +559,4 @@ export function TouchNumpadEntry({
     </div>
   );
 }
+
