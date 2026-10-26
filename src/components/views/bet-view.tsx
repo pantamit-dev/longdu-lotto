@@ -18,10 +18,16 @@ import {
 } from "lucide-react";
 
 export function BetView() {
-  const { currentRole, addTicketBatch, period } = useLiffStore();
+  const {
+    currentRole,
+    addTicketBatch,
+    period,
+    isCartModalOpen,
+    setIsCartModalOpen,
+    setCartSummary,
+  } = useLiffStore();
   const { sendMessage } = useLiff();
 
-  const [isCartModalOpen, setIsCartModalOpen] = useState(false);
   const [submittedBatch, setSubmittedBatch] = useState<TicketBatch | null>(null);
   const [sendNotice, setSendNotice] = useState<string | null>(null);
 
@@ -30,6 +36,11 @@ export function BetView() {
     adminId: "admin-001",
     commissionRate: 15,
   });
+
+  // Sync cart totals with global store for BottomNav integration
+  React.useEffect(() => {
+    setCartSummary(cart.items.length, cart.grossBetTotal);
+  }, [cart.items.length, cart.grossBetTotal, setCartSummary]);
 
   const handleOpenCart = () => {
     setIsCartModalOpen(true);

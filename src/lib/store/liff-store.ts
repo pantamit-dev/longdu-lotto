@@ -106,6 +106,13 @@ interface LiffStoreState {
   ticketBatches: TicketBatch[];
   addTicketBatch: (batch: TicketBatch) => void;
 
+  // Agent Cart State for Nav Bar
+  cartItemCount: number;
+  grossBetTotal: number;
+  setCartSummary: (count: number, total: number) => void;
+  isCartModalOpen: boolean;
+  setIsCartModalOpen: (open: boolean) => void;
+
   // Order State
   orders: LottoOrder[];
   isConfirmModalOpen: boolean;
@@ -149,6 +156,13 @@ export const useLiffStore = create<LiffStoreState>((set, get) => ({
   ticketBatches: [],
   addTicketBatch: (batch) =>
     set((state) => ({ ticketBatches: [batch, ...state.ticketBatches] })),
+
+  // Agent Cart State for Nav
+  cartItemCount: 0,
+  grossBetTotal: 0,
+  setCartSummary: (count, total) => set({ cartItemCount: count, grossBetTotal: total }),
+  isCartModalOpen: false,
+  setIsCartModalOpen: (open) => set({ isCartModalOpen: open }),
 
   // Order Management Implementation
   orders: INITIAL_ORDERS,

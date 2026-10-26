@@ -2,10 +2,16 @@
 
 import React from "react";
 import { useLiffStore, LiffTab } from "@/lib/store/liff-store";
-import { Home, Ticket, FileText, Trophy, User } from "lucide-react";
+import { Home, Ticket, FileText, Trophy, User, Eye } from "lucide-react";
 
 export function BottomNav() {
-  const { activeTab, setActiveTab } = useLiffStore();
+  const {
+    activeTab,
+    setActiveTab,
+    cartItemCount,
+    grossBetTotal,
+    setIsCartModalOpen,
+  } = useLiffStore();
 
   const navItems: { id: LiffTab; label: string; icon: React.ElementType; isCenter?: boolean }[] = [
     { id: "home", label: "หน้าหลัก", icon: Home },
@@ -20,6 +26,51 @@ export function BottomNav() {
       className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-200 dark:border-slate-800 safe-area-bottom shadow-lg"
       aria-label="เมนูหลัก"
     >
+      {/* กล่องตะกร้าโพย แสดงใน nav เมื่ออยู่หน้าแทงหวย หรือมีรายการในตะกร้า */}
+      {(activeTab === "bet" || cartItemCount > 0) && (
+        <div className="max-w-md mx-auto px-3 pt-2 pb-0.5 border-b border-slate-100 dark:border-slate-800/60">
+          <div className="flex items-center justify-between gap-2">
+            {/* ฝั่งซ้าย: ข้อมูลสรุปยอดเงินและจำนวนรายการตะกร้าโพย (อยู่เหนือ หน้าหลัก / โพยของฉัน) */}
+            <button
+              type="button"
+              onClick={() => setIsCartModalOpen(true)}
+              aria-label="ดูสรุปยอดตะกร้าโพย"
+              className="flex-1 max-w-[170px] bg-slate-900/95 dark:bg-slate-950/98 border border-slate-700/80 hover:border-emerald-500/60 rounded-xl px-2.5 py-1.5 shadow-md flex items-center justify-between text-left transition-all active:scale-95 group cursor-pointer"
+            >
+              <div className="flex flex-col min-w-0">
+                <span className="text-[10px] text-slate-400 font-medium truncate">
+                  ตะกร้า ({cartItemCount} รายการ)
+                </span>
+                <div className="flex items-baseline gap-1">
+                  <span className="text-sm font-bold font-mono text-white tabular-nums leading-tight">
+                    ฿{grossBetTotal.toLocaleString()}
+                  </span>
+                  <span className="text-[9px] text-emerald-400 font-semibold leading-tight">
+                    ยอดดิบ
+                  </span>
+                </div>
+              </div>
+            </button>
+
+            {/* เว้นช่องว่างตรงกลาง ให้ปุ่มวงกลมสีเขียว "ซื้อหวย" ใน Menu Bar ลอยได้อย่างสง่างาม ไม่ถูกทับ */}
+            <div className="w-14 flex-shrink-0" aria-hidden="true" />
+
+            {/* ฝั่งขวา: ปุ่มกด "ดูรายการโพย" (อยู่เหนือ ตรวจผล / บัญชี) */}
+            <button
+              type="button"
+              onClick={() => setIsCartModalOpen(true)}
+              className="flex-1 max-w-[170px] py-2 px-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 active:scale-95 text-white text-xs font-bold rounded-xl shadow-md shadow-emerald-950/60 border border-emerald-400/30 flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+            >
+              <Eye className="w-3.5 h-3.5 flex-shrink-0" />
+              <span className="truncate">ดูรายการโพย</span>
+              {cartItemCount > 0 && (
+                <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse flex-shrink-0" />
+              )}
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="max-w-md mx-auto px-3 py-1 flex items-center justify-between">
         {navItems.map((item) => {
           const isActive = activeTab === item.id;
