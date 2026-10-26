@@ -4,11 +4,13 @@ import React, { useState, useEffect } from "react";
 import Image from "next/image";
 import { useLiff } from "@/components/liff/liff-provider";
 import { useLiffStore } from "@/lib/store/liff-store";
-import { Wallet, Clock, RefreshCw, Sparkles, User, ShieldCheck } from "lucide-react";
+import { Wallet, Clock, RefreshCw, Sparkles, User, ShieldCheck, ShieldAlert, ArrowRight } from "lucide-react";
+import Link from "next/link";
+import { UserRole } from "@/types/lottery";
 
 export function TopHeader() {
   const { profile, isLoggedIn } = useLiff();
-  const { period, memberBalance, discountRate, refreshBalance } = useLiffStore();
+  const { period, memberBalance, discountRate, refreshBalance, currentRole, setCurrentRole } = useLiffStore();
   const [timeLeft, setTimeLeft] = useState<{ hours: number; minutes: number; seconds: number }>({
     hours: 4,
     minutes: 32,
@@ -98,6 +100,36 @@ export function TopHeader() {
             <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? "animate-spin text-emerald-400" : ""}`} />
           </button>
         </div>
+      </div>
+
+      {/* Role Switcher & Hearder Quick Link */}
+      <div className="flex items-center justify-between gap-2 mb-2 px-1">
+        <div className="flex items-center gap-1.5 text-[11px]">
+          <span className="text-slate-400 font-medium">สิทธิ์:</span>
+          {(["ADMIN", "STUFF", "MEMBER"] as UserRole[]).map((r) => (
+            <button
+              key={r}
+              type="button"
+              onClick={() => setCurrentRole(r)}
+              className={`px-2 py-0.5 rounded-lg font-bold text-[10px] transition-all ${
+                currentRole === r
+                  ? "bg-emerald-500 text-slate-950 shadow-sm"
+                  : "bg-slate-800 text-slate-400 hover:text-white"
+              }`}
+            >
+              {r === "ADMIN" ? "Admin (คนกลาง)" : r === "STUFF" ? "Stuff (ผู้ช่วย)" : "Member"}
+            </button>
+          ))}
+        </div>
+
+        <Link
+          href="/hearder/dashboard"
+          className="text-[10px] font-bold text-amber-400 hover:text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 px-2 py-0.5 rounded-lg flex items-center gap-1 transition-all"
+        >
+          <ShieldAlert className="w-3 h-3" />
+          <span>แดชบอร์ดเจ้ามือ</span>
+          <ArrowRight className="w-2.5 h-2.5" />
+        </Link>
       </div>
 
       {/* Period Banner & Countdown Hero */}

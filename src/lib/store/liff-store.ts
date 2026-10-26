@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { LottoBetItem, calculateTotals } from "@/lib/engine/lotto-engine";
+import { TicketBatch, UserRole } from "@/types/lottery";
 
 export type LiffTab = "home" | "bet" | "history" | "results" | "profile";
 
@@ -99,6 +100,12 @@ interface LiffStoreState {
   isBasketOpen: boolean;
   setIsBasketOpen: (open: boolean) => void;
 
+  // Role & Agent-Centric Batches
+  currentRole: UserRole;
+  setCurrentRole: (role: UserRole) => void;
+  ticketBatches: TicketBatch[];
+  addTicketBatch: (batch: TicketBatch) => void;
+
   // Order State
   orders: LottoOrder[];
   isConfirmModalOpen: boolean;
@@ -135,6 +142,13 @@ export const useLiffStore = create<LiffStoreState>((set, get) => ({
   clearBasket: () => set({ basket: [] }),
   isBasketOpen: false,
   setIsBasketOpen: (open) => set({ isBasketOpen: open }),
+
+  // Role & Batches
+  currentRole: "ADMIN",
+  setCurrentRole: (role) => set({ currentRole: role }),
+  ticketBatches: [],
+  addTicketBatch: (batch) =>
+    set((state) => ({ ticketBatches: [batch, ...state.ticketBatches] })),
 
   // Order Management Implementation
   orders: INITIAL_ORDERS,
