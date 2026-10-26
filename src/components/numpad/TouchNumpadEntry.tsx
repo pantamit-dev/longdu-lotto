@@ -526,33 +526,48 @@ export function TouchNumpadEntry({
         </button>
       </div>
 
-      {/* Spacer between numpad and floating cart bar */}
-      <div className="h-4" aria-hidden="true" />
+      {/* Spacer between numpad and bottom dock */}
+      <div className="h-6" aria-hidden="true" />
 
-      {/* 7. Floating Bottom Summary Bar (ยกสูงลอยเด่นเหนือ BottomNav ไม่ถูกบดบัง) */}
-      <div className="fixed bottom-[80px] sm:bottom-[84px] left-0 right-0 max-w-md mx-auto px-4 z-35 pointer-events-none">
-        <div className="bg-slate-900/98 backdrop-blur-lg border border-slate-750 rounded-2xl p-3.5 shadow-[0_-4px_24px_rgba(0,0,0,0.6)] flex items-center justify-between pointer-events-auto ring-1 ring-white/10">
-          <div className="flex flex-col">
-            <span className="text-[11px] text-slate-400 font-medium">
-              ตะกร้าโพย ({cartItemCount} รายการ)
-            </span>
-            <div className="flex items-baseline gap-1.5 mt-0.5">
-              <span className="text-xl font-bold font-mono text-white tabular-nums">
-                ฿{grossBetTotal.toLocaleString()}
-              </span>
-              <span className="text-[10px] text-emerald-400 font-bold bg-emerald-500/15 border border-emerald-500/30 px-1.5 py-0.5 rounded">
-                ยอดดิบ
-              </span>
-            </div>
-          </div>
-
+      {/* 7. Bottom Dock Summary Bar (ย้ายมาอยู่บน Menu Bar ตามภาพตัวอย่าง) */}
+      <div className="fixed bottom-[58px] sm:bottom-[60px] left-0 right-0 max-w-md mx-auto px-3 z-35 pointer-events-none">
+        <div className="flex items-center justify-between gap-2 pointer-events-auto">
+          {/* ฝั่งซ้าย: ข้อมูลสรุปยอดเงินและจำนวนรายการตะกร้าโพย (อยู่เหนือ หน้าหลัก / โพยของฉัน) */}
           <button
             type="button"
             onClick={onOpenCartModal}
-            className="px-4 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 active:scale-95 text-white text-xs font-bold rounded-xl shadow-lg shadow-emerald-950 flex items-center gap-1.5 transition-all"
+            aria-label="ดูสรุปยอดตะกร้าโพย"
+            className="flex-1 max-w-[170px] bg-slate-900/98 backdrop-blur-md border border-slate-700/80 hover:border-emerald-500/60 rounded-xl px-2.5 py-1.5 shadow-lg flex items-center justify-between text-left transition-all active:scale-95 group"
           >
-            <Eye className="w-4 h-4" />
-            <span>ดูรายการโพย</span>
+            <div className="flex flex-col min-w-0">
+              <span className="text-[10px] text-slate-400 font-medium truncate">
+                ตะกร้า ({cartItemCount} รายการ)
+              </span>
+              <div className="flex items-baseline gap-1">
+                <span className="text-sm font-bold font-mono text-white tabular-nums leading-tight">
+                  ฿{grossBetTotal.toLocaleString()}
+                </span>
+                <span className="text-[9px] text-emerald-400 font-semibold leading-tight">
+                  ยอดดิบ
+                </span>
+              </div>
+            </div>
+          </button>
+
+          {/* เว้นช่องว่างตรงกลาง ให้ปุ่มวงกลมสีเขียว "ซื้อหวย" ใน Menu Bar ลอยได้อย่างสง่างาม ไม่ถูกทับ */}
+          <div className="w-14 flex-shrink-0" aria-hidden="true" />
+
+          {/* ฝั่งขวา: ปุ่มกด "ดูรายการโพย" (อยู่เหนือ ตรวจผล / บัญชี ตรงตามกรอบสีแดงในภาพตัวอย่าง) */}
+          <button
+            type="button"
+            onClick={onOpenCartModal}
+            className="flex-1 max-w-[170px] py-2 px-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 active:scale-95 text-white text-xs font-bold rounded-xl shadow-lg shadow-emerald-950/60 border border-emerald-400/30 flex items-center justify-center gap-1.5 transition-all"
+          >
+            <Eye className="w-3.5 h-3.5 flex-shrink-0" />
+            <span className="truncate">ดูรายการโพย</span>
+            {cartItemCount > 0 && (
+              <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse flex-shrink-0" />
+            )}
           </button>
         </div>
       </div>
